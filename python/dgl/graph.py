@@ -199,6 +199,8 @@ class DGLGraph(object):
         self._reduce_func = None
         self._apply_node_func = None
         self._apply_edge_func = None
+        # storage of edge lists
+        self._edge_lists = {}
 
     def add_nodes(self, num, data=None):
         """Add multiple new nodes.
@@ -1923,7 +1925,7 @@ class DGLGraph(object):
                                            inplace=inplace)
             Runtime.run(prog)
 
-    def send(self, edges=ALL, message_func="default"):
+    def send(self, edges=ALL, message_func="default", index=None):
         """Send messages along the given edges.
 
         ``edges`` can be any of the following types:
@@ -1949,6 +1951,9 @@ class DGLGraph(object):
         message_func : callable
             Message function on the edges. The function should be
             an :mod:`Edge UDF <dgl.udf>`.
+        index : None or int
+            If not None, first try to find the list of edges stored in dict_list_edges.
+            If present, use this list. Otherwise, store it after the computation
 
         Notes
         -----
@@ -1961,8 +1966,9 @@ class DGLGraph(object):
         """
         if message_func == "default":
             message_func = self._message_func
-
-        if is_all(edges):
+        if index is not None and index in self._edge_lists:
+            eid, u, v = self._edge_lists[index]
+        elif is_all(edges):
             eid = utils.toindex(slice(0, self.number_of_edges()))
             u, v, _ = self._graph.edges()
         elif isinstance(edges, tuple):
@@ -1975,6 +1981,8 @@ class DGLGraph(object):
             eid = utils.toindex(edges)
             u, v, _ = self._graph.find_edges(eid)
 
+        if index is not None and index not in self._edge_lists:
+            self._edge_lists[index] = [eid, u, v]
         if len(eid) == 0:
             # no edge to be triggered
             return
